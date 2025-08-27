@@ -1,12 +1,18 @@
 import pandas as pd
 import requests
 import base64
+import os
 from datetime import datetime, timedelta
 
 # SonarQube parameters
-SONARQUBE_URL = 'http://localhost:9000/api/issues/search' #Sonar Instance URL
-PROJECT_KEY = '' #Your Project Key
-TOKEN = '' #Your Project Token
+SONARQUBE_URL = os.getenv('SONAR_URL', 'http://localhost:9000/api/issues/search') #Sonar Instance URL
+PROJECT_KEY = os.getenv('SONAR_PROJECT_KEY', '') #Your Project Key
+TOKEN = os.getenv('SONAR_TOKEN', '') #Your Project Token
+
+# Add basic input validation
+if not PROJECT_KEY or not TOKEN:
+    print("Error: PROJECT_KEY and TOKEN must be configured")
+    exit(1)
 
 # Fetch issues from SonarQube
 auth = base64.b64encode(f'{TOKEN}:'.encode()).decode()
@@ -25,8 +31,10 @@ while current_start_date < end_date:
     current_end_date = current_start_date + delta
     if current_end_date > end_date:
         current_end_date = end_date
+        
+    print(f"Fetching issues from {current_start_date.strftime('%Y-%m-%d')} to {current_end_date.strftime('%Y-%m-%d')}...")
 
-    params = { #Ajdust as required
+    params = { #Adjust as required
         'componentKeys': PROJECT_KEY,
         'createdAfter': current_start_date.strftime('%Y-%m-%d'),
         'createdBefore': current_end_date.strftime('%Y-%m-%d'),
@@ -58,12 +66,14 @@ while current_start_date < end_date:
             break
 
     current_start_date = current_end_date
+    print(f"Found {len(all_issues)} issues so far...")
 
 if all_issues:
     # Convert to DataFrame
     df = pd.DataFrame(all_issues)
     # Save to Excel
     df.to_excel('sonarqube_issues.xlsx', index=False)
-    print('Issues exported to sonarqube_issues.xlsx')
+    print(f'✅ Export completed: {len(all_issues)} issues exported to sonarqube_issues.xlsx')
+    print(f'📊 Date range: {start_date.strftime("%Y-%m-%d")} to {end_date.strftime("%Y-%m-%d")}')
 else:
     print('No issues found.')
