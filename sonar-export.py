@@ -43,28 +43,45 @@ while current_start_date < end_date:
     }
 
     while True:
-        response = requests.get(SONARQUBE_URL, headers=headers, params=params)
-        
-        if response.status_code == 200:
-            try:
-                data = response.json()
-                issues = data.get('issues', [])
-                all_issues.extend(issues)
-                
-                # Check if there are more pages
-                if len(issues) < page_size:
-                    break  # No more pages
+        try:
+            response = requests.get(SONARQUBE_URL, headers=headers, params=params, timeout=30)
+            
+            if response.status_code == 200:
+                try:
+                    data = response.json()
+                    issues = data.get('issues', [])
+                    all_issues.extend(issues)
+                    
+                    # Check if there are more pages
+                    if len(issues) < page_size:
+                        break  # No more pages
+                    else:
+                        params['p'] += 1  # Next page
+                except requests.exceptions.JSONDecodeError as e:
+                    print('Failed to parse JSON response:', e)
+                    print('Response content:', response.text)
+                    break
+            else:
+                if response.status_code == 401:
+                    print('❌ Authentication failed. Check your TOKEN.')
+                elif response.status_code == 404:
+                    print('❌ Project not found. Check your PROJECT_KEY and SONARQUBE_URL.')
+                elif response.status_code == 403:
+                    print('❌ Access denied. Check project permissions.')
                 else:
-                    params['p'] += 1  # Next page
-            except requests.exceptions.JSONDecodeError as e:
-                print('Failed to parse JSON response:', e)
+                    print(f'❌ API request failed with status {response.status_code}')
                 print('Response content:', response.text)
                 break
-        else:
-            print(f'Failed to fetch issues. Status code: {response.status_code}')
-            print('Response content:', response.text)
+        except requests.exceptions.Timeout:
+            print('❌ Connection timed out. Check your network or try again later.')
             break
-
+        except requests.exceptions.ConnectionError:
+            print('❌ Connection error. Check your network and SONARQUBE_URL.')
+            break
+        except Exception as e:
+            print(f'❌ Unexpected error occurred: {e}')
+            break
+            
     current_start_date = current_end_date
     print(f"Found {len(all_issues)} issues so far...")
 
