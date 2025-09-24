@@ -1,12 +1,39 @@
-import pandas as pd
-import requests
-import base64
-from datetime import datetime, timedelta
+try:
+    import pandas as pd
+    import requests
+    import base64
+    import os
+    from datetime import datetime, timedelta
+except ImportError as e:
+    print(f"Missing required dependency: {e}")
+    print("Run: pip install requests pandas openpyxl")
+    exit(1)
 
 # SonarQube parameters
-SONARQUBE_URL = 'http://localhost:9000/api/issues/search' #Sonar Instance URL
-PROJECT_KEY = '' #Your Project Key
-TOKEN = '' #Your Project Token
+SONARQUBE_URL = os.getenv('SONAR_URL', 'http://localhost:9000/api/issues/search') #Sonar Instance URL
+PROJECT_KEY = os.getenv('SONAR_PROJECT_KEY', '') #Your Project Key
+TOKEN = os.getenv('SONAR_TOKEN', '') #Your Project Token
+
+# Add basic input validation
+if not PROJECT_KEY or not TOKEN:
+    print("Error: PROJECT_KEY and TOKEN must be configured")
+    exit(1)
+
+# Function to write data in chunks to Excel
+def write_chunk_to_excel(filename, chunk_data, mode='w'):
+    df = pd.DataFrame(chunk_data)
+    if mode == 'w':
+        # First chunk: create new file
+        df.to_excel(filename, index=False, engine='openpyxl')
+    else:
+        # Subsequent chunks: append to existing file without headers
+        with pd.ExcelWriter(filename, engine='openpyxl', mode='a', if_sheet_exists='overlay') as writer:
+            # Get the current number of rows
+            book = writer.book
+            sheet = book.active
+            startrow = sheet.max_row
+            # Write the new data
+            df.to_excel(writer, index=False, header=False, startrow=startrow)
 
 # Fetch issues from SonarQube
 auth = base64.b64encode(f'{TOKEN}:'.encode()).decode()
@@ -20,13 +47,19 @@ delta = timedelta(days=30)  # Adjust the range to ensure < 10,000 results
 
 current_start_date = start_date
 all_issues = []
+excel_file = 'sonarqube_issues.xlsx'
+chunk_size = 5000  # Write to file every 5000 issues
+excel_mode = 'w'  # Start with write mode for the first chunk
+total_issues_count = 0
 
 while current_start_date < end_date:
     current_end_date = current_start_date + delta
     if current_end_date > end_date:
         current_end_date = end_date
+        
+    print(f"Fetching issues from {current_start_date.strftime('%Y-%m-%d')} to {current_end_date.strftime('%Y-%m-%d')}...")
 
-    params = { #Ajdust as required
+    params = { #Adjust as required
         'componentKeys': PROJECT_KEY,
         'createdAfter': current_start_date.strftime('%Y-%m-%d'),
         'createdBefore': current_end_date.strftime('%Y-%m-%d'),
@@ -35,35 +68,63 @@ while current_start_date < end_date:
     }
 
     while True:
-        response = requests.get(SONARQUBE_URL, headers=headers, params=params)
-        
-        if response.status_code == 200:
-            try:
-                data = response.json()
-                issues = data.get('issues', [])
-                all_issues.extend(issues)
-                
-                # Check if there are more pages
-                if len(issues) < page_size:
-                    break  # No more pages
+        try:
+            response = requests.get(SONARQUBE_URL, headers=headers, params=params, timeout=30)
+            
+            if response.status_code == 200:
+                try:
+                    data = response.json()
+                    issues = data.get('issues', [])
+                    all_issues.extend(issues)
+                    total_issues_count += len(issues)
+                    
+                    # Write to Excel in chunks to save memory
+                    if len(all_issues) >= chunk_size:
+                        print(f"Writing chunk of {len(all_issues)} issues to Excel...")
+                        write_chunk_to_excel(excel_file, all_issues, excel_mode)
+                        all_issues = []  # Clear memory
+                        excel_mode = 'a'  # Switch to append mode after first write
+                    
+                    # Check if there are more pages
+                    if len(issues) < page_size:
+                        break  # No more pages
+                    else:
+                        params['p'] += 1  # Next page
+                except requests.exceptions.JSONDecodeError as e:
+                    print('Failed to parse JSON response:', e)
+                    print('Response content:', response.text)
+                    break
+            else:
+                if response.status_code == 401:
+                    print('❌ Authentication failed. Check your TOKEN.')
+                elif response.status_code == 404:
+                    print('❌ Project not found. Check your PROJECT_KEY and SONARQUBE_URL.')
+                elif response.status_code == 403:
+                    print('❌ Access denied. Check project permissions.')
                 else:
-                    params['p'] += 1  # Next page
-            except requests.exceptions.JSONDecodeError as e:
-                print('Failed to parse JSON response:', e)
+                    print(f'❌ API request failed with status {response.status_code}')
                 print('Response content:', response.text)
                 break
-        else:
-            print(f'Failed to fetch issues. Status code: {response.status_code}')
-            print('Response content:', response.text)
+        except requests.exceptions.Timeout:
+            print('❌ Connection timed out. Check your network or try again later.')
             break
-
+        except requests.exceptions.ConnectionError:
+            print('❌ Connection error. Check your network and SONARQUBE_URL.')
+            break
+        except Exception as e:
+            print(f'❌ Unexpected error occurred: {e}')
+            break
+            
     current_start_date = current_end_date
+    print(f"Found {total_issues_count} issues so far...")
 
+# Handle any remaining issues
 if all_issues:
-    # Convert to DataFrame
-    df = pd.DataFrame(all_issues)
-    # Save to Excel
-    df.to_excel('sonarqube_issues.xlsx', index=False)
-    print('Issues exported to sonarqube_issues.xlsx')
+    print(f"Writing final chunk of {len(all_issues)} issues to Excel...")
+    write_chunk_to_excel(excel_file, all_issues, excel_mode)
+
+if total_issues_count > 0:
+    print(f'✅ Export completed: {total_issues_count} issues exported to {excel_file}')
+    print(f'📊 Date range: {start_date.strftime("%Y-%m-%d")} to {end_date.strftime("%Y-%m-%d")}')
 else:
     print('No issues found.')
