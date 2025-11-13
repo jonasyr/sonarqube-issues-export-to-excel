@@ -28,6 +28,19 @@ args = parser.parse_args()
 
 # Function to write data in chunks to CSV
 def write_chunk_to_csv(filename, chunk_data, mode='w'):
+    """
+    Write a chunk of issue data to a CSV file.
+
+    Parameters:
+        filename (str): The path to the output CSV file.
+        chunk_data (list): List of issue dictionaries to write.
+        mode (str): File write mode, 'w' for write (creates new file), 'a' for append.
+
+    Behavior:
+        - Converts chunk_data to a pandas DataFrame.
+        - Writes the DataFrame to the specified CSV file.
+        - If mode is 'w', includes the header; if 'a', omits the header.
+    """
     df = pd.DataFrame(chunk_data)
     # For CSV, we can simply append with or without header
     df.to_csv(filename, index=False, mode=mode, header=(mode == 'w'))
@@ -54,7 +67,7 @@ headers = {'Authorization': f'Basic {auth}'}
 page_size = 500  # Page size, maximum allowed by SonarQube
 
 # Adjust date ranges as necessary to ensure each range returns less than 10,000 issues
-start_date = datetime(2025, 1, 1)  # Example start date
+start_date = datetime(2000, 1, 1)  # Example start date
 end_date = datetime.now()  # Current date and time
 delta = timedelta(days=30)  # Adjust the range to ensure < 10,000 results
 
