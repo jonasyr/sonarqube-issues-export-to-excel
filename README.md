@@ -1,106 +1,231 @@
-
 # SonarQube Issues Export
 
-This Python script fetches issues from a SonarQube project and exports them to CSV or Excel format. It uses the SonarQube REST API and handles pagination, date ranges, and chunked writing to efficiently retrieve and export large numbers of issues.
+<div align="center">
 
-**Compatible with both local SonarQube instances (localhost:9000) and SonarCloud.**
+![Python Version](https://img.shields.io/badge/python-3.8%2B-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
+![Platform](https://img.shields.io/badge/platform-linux%20%7C%20macos%20%7C%20windows-lightgrey)
+![SonarQube](https://img.shields.io/badge/SonarQube-%E2%9C%93-success)
+![SonarCloud](https://img.shields.io/badge/SonarCloud-%E2%9C%93-success)
 
-## Prerequisites
+**A powerful, production-ready tool to export SonarQube/SonarCloud issues to CSV or Excel with advanced features like incremental exports, multi-project support, and comprehensive logging.**
 
-- Python 3.x
-- `requests`, `pandas`, `openpyxl` library
-- Access to a SonarQube instance with an appropriate token
+[Features](#features) •
+[Quick Setup](#quick-setup) •
+[Documentation](#detailed-documentation) •
+[Examples](#usage-examples) •
+[Testing](#testing)
 
-## Installation
+</div>
 
-1. Clone the repository:
+---
+
+## Table of Contents
+
+- [Quick Setup](#quick-setup)
+- [Features](#features)
+- [Detailed Documentation](#detailed-documentation)
+  - [Installation](#installation)
+  - [Configuration](#configuration)
+  - [Command-Line Options](#command-line-options)
+- [Usage Examples](#usage-examples)
+  - [Basic Export](#basic-export)
+  - [Date Filtering](#date-filtering)
+  - [Issue Filtering](#issue-filtering)
+  - [Incremental Exports](#incremental-exports)
+  - [Multi-Project Exports](#multi-project-exports)
+  - [Configuration Files](#configuration-files)
+  - [Summary Reports](#summary-reports)
+- [Output Files](#output-files)
+- [Performance Recommendations](#performance-recommendations)
+- [Filter Reference](#filter-reference)
+- [Testing](#testing)
+- [Troubleshooting](#troubleshooting)
+- [License](#license)
+
+---
+
+## Quick Setup
+
+Get started in under 1 minute:
 
 ```bash
+# 1. Clone and install
 git clone https://github.com/talha2k/sonarqube-issues-export-to-excel.git
 cd sonarqube-issues-export-to-excel
+pip install -r requirements.txt
+
+# 2. Set environment variables
+export SONAR_URL='https://sonarcloud.io/api/issues/search'  # or your SonarQube URL
+export SONAR_PROJECT_KEY='your-project-key'
+export SONAR_TOKEN='your-token'
+
+# 3. Run export
+python sonar-export.py
 ```
 
-2. Install the required Python libraries:
+That's it! Your issues are now in `sonarqube_issues.csv` ✨
+
+---
+
+## Features
+
+###  Core Export Capabilities
+- **Multiple Export Formats**: CSV (default, recommended) or Excel (XLSX)
+- **CSV-First Strategy**: Creates CSV first, then optionally converts to Excel for better memory management
+- **Flexible Date Filtering**: Customize start and end dates
+- **Advanced Filtering**: Filter by severity, type, and status
+- **Chunked Writing**: Processes 5000 issues per chunk to minimize memory usage
+- **Automatic Pagination**: Handles SonarQube's 10,000 result limit automatically
+- **Both Platforms**: Works with SonarQube (localhost:9000) and SonarCloud
+
+###  Data Quality & Analysis
+- **Data Flattening**: Automatically flattens nested JSON (textRange, impacts) into 35+ columns
+- **Summary Reports**: Generate statistical summaries with `--summary` flag
+  - Issues breakdown by severity, type, and status with percentages
+  - Top 10 most common rules
+  - Date range statistics
+- **Clean Column Structure**: All SonarQube fields extracted and formatted for easy analysis
+
+###  Enterprise Features (Phase 3)
+- **Multi-Project Support**: Export from multiple projects in one command
+  - Comma-separated list: `--projects project1,project2,project3`
+  - From file: `--projects @projects.txt`
+  - Consolidated summary report (JSON)
+- **Incremental Exports**: Only export new issues since last export
+  - Automatic state tracking per project
+  - Perfect for daily/weekly automated exports
+  - Saves time and bandwidth
+- **Unit Tests**: Comprehensive test suite with 12+ unit tests
+
+###  Reliability & Debugging
+- **Automatic Retry Logic**: Exponential backoff for transient failures (429, 500, 502, 503, 504)
+- **Comprehensive Logging**: Timestamped logs to both console and file
+- **Configurable Log Levels**: DEBUG, INFO, WARNING, ERROR
+- **Detailed Error Messages**: Specific guidance for common issues (401, 403, 404, timeouts)
+
+###  Configuration & Flexibility
+- **Environment Variables**: Secure credential management
+- **Configuration Files**: Reusable INI-based configurations
+- **Priority System**: ENV vars > CLI args > config file > defaults
+- **Real-time Progress**: Live progress reporting during export
+
+---
+
+## Detailed Documentation
+
+### Installation
+
+**Prerequisites:**
+- Python 3.8 or higher
+- Access to a SonarQube instance or SonarCloud with a valid token
+
+**Install Dependencies:**
 
 ```bash
-pip install requests pandas openpyxl
+pip install -r requirements.txt
 ```
 
-## Configuration
-
-Configure the script using environment variables. The script works with both local SonarQube instances and SonarCloud.
-
-### For Local SonarQube Instance (default)
+Or manually:
 
 ```bash
-export SONAR_URL='http://localhost:9000/api/issues/search'   # Local SonarQube instance
-export SONAR_PROJECT_KEY='your-project-key'                  # Your project key
-export SONAR_TOKEN='your-authentication-token'               # Your authentication token
+pip install requests==2.32.5 pandas==2.3.3 openpyxl==3.1.5
 ```
 
-### For SonarCloud
+### Configuration
+
+#### Environment Variables (Recommended)
 
 ```bash
-export SONAR_URL='https://sonarcloud.io/api/issues/search'   # SonarCloud instance
-export SONAR_PROJECT_KEY='your-project-key'                  # Your project key
-export SONAR_TOKEN='your-authentication-token'               # Your authentication token
+# For SonarCloud
+export SONAR_URL='https://sonarcloud.io/api/issues/search'
+export SONAR_PROJECT_KEY='your-project-key'
+export SONAR_TOKEN='your-authentication-token'
+
+# For Local SonarQube
+export SONAR_URL='http://localhost:9000/api/issues/search'
+export SONAR_PROJECT_KEY='your-project-key'
+export SONAR_TOKEN='your-authentication-token'
 ```
 
-Alternatively, you can edit these values directly in the script.
+#### Configuration File (Optional)
 
-## Usage
+Create `config.ini` (see `config.ini.example` for template):
 
-### Basic Usage
+```ini
+[sonarqube]
+url = https://sonarcloud.io/api/issues/search
+project_key = my-project
+
+[export]
+format = csv
+start_date = 2024-01-01
+
+[filters]
+severities = BLOCKER,CRITICAL
+types = BUG,VULNERABILITY
+```
+
+### Command-Line Options
+
+```
+python sonar-export.py [OPTIONS]
+
+Export Options:
+  --format {csv,xlsx}             Output format (default: csv)
+  --output, -o FILENAME           Custom output filename
+  --start-date YYYY-MM-DD         Start date (default: 2000-01-01)
+  --end-date YYYY-MM-DD           End date (default: today)
+
+Filtering Options:
+  --severities SEVERITIES         Filter by severity (comma-separated)
+  --types TYPES                   Filter by issue type (comma-separated)
+  --statuses STATUSES             Filter by status (comma-separated)
+
+Advanced Features:
+  --projects PROJECTS             Multi-project export (comma-separated or @file.txt)
+  --incremental                   Export only new issues since last export
+  --summary                       Generate summary report after export
+  --config CONFIG_FILE            Path to configuration file
+  --log-level {DEBUG,INFO,WARNING,ERROR}  Logging verbosity (default: INFO)
+```
+
+---
+
+## Usage Examples
+
+### Basic Export
 
 ```bash
-# Export to CSV (default, recommended)
+# Export all issues to CSV (default, recommended)
 python sonar-export.py
 
 # Export to Excel
 python sonar-export.py --format xlsx
+
+# Custom filename
+python sonar-export.py --output my_issues
 ```
 
-### Export Options
-
-The script supports various command-line arguments for customization:
+### Date Filtering
 
 ```bash
-python sonar-export.py [OPTIONS]
-
-Options:
-  --format {csv,xlsx}        Output format (default: csv)
-  --output, -o FILENAME      Custom output filename
-  --start-date YYYY-MM-DD    Start date for issue retrieval (default: 2000-01-01)
-  --end-date YYYY-MM-DD      End date for issue retrieval (default: today)
-  --severities SEVERITIES    Filter by severities (comma-separated)
-  --types TYPES              Filter by issue types (comma-separated)
-  --statuses STATUSES        Filter by statuses (comma-separated)
-  --config CONFIG_FILE       Path to configuration file
-  --summary                  Generate summary report after export
-  --log-level {DEBUG,INFO,WARNING,ERROR}  Logging level (default: INFO)
-```
-
-## Advanced Usage Examples
-
-### Export ALL historical issues (default behavior)
-```bash
+# Export ALL historical issues (default)
 python sonar-export.py
-# This exports all issues from 2000-01-01 to today
-```
+# Exports from 2000-01-01 to today
 
-### Export only recent issues
-```bash
-# Only issues from 2025
+# Only recent issues
 python sonar-export.py --start-date 2025-01-01
+
+# Specific date range
+python sonar-export.py --start-date 2024-01-01 --end-date 2024-12-31
 
 # Last 30 days (Linux/Mac)
 python sonar-export.py --start-date $(date -d '30 days ago' +%Y-%m-%d)
-
-# Custom date range
-python sonar-export.py --start-date 2024-01-01 --end-date 2024-12-31
 ```
 
-### Filter by severity and type
+### Issue Filtering
+
 ```bash
 # Only critical bugs
 python sonar-export.py --severities BLOCKER,CRITICAL --types BUG
@@ -108,104 +233,164 @@ python sonar-export.py --severities BLOCKER,CRITICAL --types BUG
 # Only open code smells
 python sonar-export.py --types CODE_SMELL --statuses OPEN,CONFIRMED
 
-# High severity issues only
+# High severity issues
 python sonar-export.py --severities BLOCKER,CRITICAL,MAJOR
 ```
 
-### Custom output filename
-```bash
-python sonar-export.py --output my_project_issues_2025.csv
+### Incremental Exports
 
-# Excel format with custom name
-python sonar-export.py --format xlsx --output critical_bugs
+Perfect for automated daily/weekly exports - only fetches new issues since last run:
+
+```bash
+# First run: exports all issues and saves state
+python sonar-export.py --incremental
+
+# Second run: only exports new issues since first run
+python sonar-export.py --incremental
+
+# Combine with other options
+python sonar-export.py --incremental --severities BLOCKER,CRITICAL --summary
 ```
 
-### Complete workflow for large projects
+**How it works:**
+- First run creates `.last_export_PROJECT.json` with export timestamp
+- Subsequent runs only fetch issues created after last export date
+- Saves bandwidth and time for large projects
+- Each project has its own state file
+
+### Multi-Project Exports
+
+Export from multiple projects in a single command:
+
 ```bash
-# Step 1: Export to CSV (memory efficient, recommended for large projects)
-export SONAR_URL='https://sonarcloud.io/api/issues/search'
-export SONAR_PROJECT_KEY='my-large-project'
-export SONAR_TOKEN='your-token'
+# Comma-separated list
+python sonar-export.py --projects project1,project2,project3
 
-python sonar-export.py --format csv --output all_issues
+# From file (one project per line, # for comments)
+cat > projects.txt <<EOF
+# Production projects
+prod-frontend
+prod-backend
+# Development projects
+dev-app
+EOF
 
-# Step 2: If you need Excel, specify xlsx format
-# The script will create CSV first, then convert
-python sonar-export.py --format xlsx --output all_issues
+python sonar-export.py --projects @projects.txt
+
+# With filters and custom output directory
+python sonar-export.py --projects @projects.txt \
+  --start-date 2025-01-01 \
+  --severities BLOCKER,CRITICAL \
+  --output my_exports
+
+# Multi-project + incremental (perfect for automation!)
+python sonar-export.py --projects @projects.txt --incremental --summary
 ```
 
-### Generate Summary Report
-```bash
-# Export with automatic summary report generation
-python sonar-export.py --summary
-
-# This creates:
-# - sonarqube_issues.csv (the main export)
-# - export_summary.txt (statistical summary)
+**Output structure:**
+```
+my_exports/
+  ├── project1_issues.csv
+  ├── project2_issues.csv
+  ├── project3_issues.csv
+  └── export_summary.json
 ```
 
-### Using Configuration Files
+### Configuration Files
+
 ```bash
-# Create a config file (see config.ini.example)
+# Create config file
 cp config.ini.example config.ini
-
-# Edit config.ini with your settings
 nano config.ini
 
-# Use the config file (CLI args override config values)
+# Use config file
 python sonar-export.py --config config.ini
 
-# Config file combined with CLI overrides
+# CLI args override config values
 python sonar-export.py --config config.ini --start-date 2025-01-01 --summary
 ```
 
-## Features
+### Summary Reports
 
-### Core Export Features
-- **Multiple Export Formats**: Export to CSV (default, recommended) or Excel (XLSX) format
-- **CSV-First Strategy**: For Excel exports, creates CSV first then converts (better memory management)
-- **Flexible Date Filtering**: Customize start and end dates for export
-- **Issue Filtering**: Filter by severity, type, and status
-- **Chunked Writing**: Writes data in chunks (every 5000 issues) to minimize memory usage for large exports
-- **Date Range Handling**: Automatically splits requests into date ranges to handle SonarQube's 10,000 result limit
-- **Pagination Support**: Handles pagination to fetch all issues within each date range
+```bash
+# Generate statistical summary
+python sonar-export.py --summary
 
-### Data Quality & Analysis
-- **Data Flattening**: Automatically flattens nested JSON structures (textRange, impacts) into separate columns for easier analysis
-- **Summary Reports**: Generate comprehensive statistical summaries with `--summary` flag
-  - Issues by severity, type, and status
-  - Top 10 most common rules
-  - Date range statistics
-- **35+ Flattened Columns**: All relevant SonarQube fields extracted and formatted for analysis
+# Creates:
+# - sonarqube_issues.csv (main export)
+# - export_summary.txt (statistical breakdown)
+```
 
-### Reliability & Debugging
-- **Automatic Retry Logic**: Built-in exponential backoff retry for transient failures (429, 500, 502, 503, 504)
-- **Comprehensive Logging**: Timestamped logs to both console and file for debugging
-- **Log Levels**: Configurable verbosity (DEBUG, INFO, WARNING, ERROR)
-- **Comprehensive Error Handling**: Specific error messages for common issues:
-  - Authentication failures (401)
-  - Project not found (404)
-  - Access denied (403)
-  - Connection timeouts
-  - Network errors
+Example summary output:
+```
+============================================================
+SONARQUBE EXPORT SUMMARY REPORT
+============================================================
 
-### Configuration & Flexibility
-- **Environment Variable Support**: Configure via environment variables for better security
-- **Configuration File Support**: Use INI files for reusable configurations
-- **CLI Override Priority**: Environment vars > CLI args > config file > defaults
-- **Progress Reporting**: Shows real-time progress during export
+Generated: 2025-11-13 23:22:09
+Project: gitray-dev
+Total Issues: 110
+
+------------------------------------------------------------
+BY SEVERITY
+------------------------------------------------------------
+  MINOR             105 ( 95.5%)
+  MAJOR               4 (  3.6%)
+  INFO                1 (  0.9%)
+
+------------------------------------------------------------
+TOP 10 RULES
+------------------------------------------------------------
+   1. typescript:S7748                                  29
+   2. typescript:S7772                                  24
+...
+```
+
+---
+
+## Output Files
+
+### Always Generated
+- **CSV/Excel Export**: `sonarqube_issues.csv` or `sonarqube_issues.xlsx` (or custom name via `--output`)
+- **Log File**: `sonar_export_YYYYMMDD_HHMMSS.log` - Detailed execution log with timestamps
+
+### Optional Outputs
+- **Summary Report**: `export_summary.txt` - Statistical breakdown (with `--summary`)
+- **State Files**: `.last_export_PROJECT.json` - Incremental export tracking (with `--incremental`)
+- **Multi-Project Summary**: `export_summary.json` - Consolidated results (with `--projects`)
+
+### Log Levels
+
+Control verbosity with `--log-level`:
+- **DEBUG**: Detailed diagnostic information
+- **INFO**: Confirmation of expected behavior (default)
+- **WARNING**: Unexpected events that don't prevent execution
+- **ERROR**: Serious problems preventing some functionality
+
+```bash
+python sonar-export.py --log-level DEBUG --summary
+```
+
+---
 
 ## Performance Recommendations
 
 ### For Large Projects (>50,000 issues)
-- **Always use CSV format** for initial export (better memory management)
-- Use **date filtering** to reduce scope: `--start-date 2024-01-01`
-- Apply **severity/type filters** to reduce data volume
-- Consider **incremental exports** (export by year or quarter)
+- ✅ **Always use CSV format** for initial export (better memory management)
+- ✅ Use **date filtering** to reduce scope: `--start-date 2024-01-01`
+- ✅ Apply **severity/type filters** to reduce data volume
+- ✅ Consider **incremental exports** for regular updates
+- ✅ Use **multi-project** mode to batch multiple projects efficiently
 
-Example for very large project:
+### Memory Considerations
+The script uses **chunked writing** (5000 issues per chunk) to minimize memory:
+- CSV format: ~1-2 GB RAM for millions of issues
+- Excel conversion: 2-4x the CSV file size in RAM
+
+### Large-Scale Export Example
+
 ```bash
-# Export by year
+# Export by year for very large projects
 for year in 2020 2021 2022 2023 2024 2025; do
   python sonar-export.py \
     --start-date ${year}-01-01 \
@@ -214,122 +399,161 @@ for year in 2020 2021 2022 2023 2024 2025; do
 done
 ```
 
-### Memory Considerations
-The script uses **chunked writing** (5000 issues per chunk) to minimize memory usage.
-For projects with millions of issues:
-- CSV format uses ~1-2 GB RAM
-- Excel conversion may require 2-4x the CSV file size in RAM
+---
 
-## Customization
-
-You can customize the date range and other parameters by editing the script:
-
-- `start_date`: Start date for issue retrieval (default: 2000-01-01 to export ALL historical issues)
-- `end_date`: End date (default: current date)
-- `delta`: Date range chunk size (default: 30 days)
-- `chunk_size`: How often data is written to disk (default: 5000 issues)
-
-**Note**: The default configuration exports ALL issues from 2000 onwards. For large projects with many issues, you may want to adjust the start date or use filtering options to reduce the export scope.
-
-### Example: Export only recent issues
-
-To export only issues from this year, modify the script or use command-line arguments:
-```bash
-python sonar-export.py --start-date 2025-01-01
-```
-
-## Example Output
-
-### Using Local SonarQube Instance
-
-```bash
-# Set up environment variables for local instance
-export SONAR_URL='http://localhost:9000/api/issues/search'
-export SONAR_PROJECT_KEY='my-project'
-export SONAR_TOKEN='your-token-here'
-
-# Export to CSV (default, recommended)
-python sonar-export.py
-```
-
-### Using SonarCloud
-
-```bash
-# Set up environment variables for SonarCloud
-export SONAR_URL='https://sonarcloud.io/api/issues/search'
-export SONAR_PROJECT_KEY='my-project'
-export SONAR_TOKEN='your-token-here'
-
-# Export with filters
-python sonar-export.py --severities BLOCKER,CRITICAL --start-date 2025-01-01
-```
-
-Example output:
-```
-🚀 Starting export...
-📅 Date range: 2000-01-01 to 2025-11-13
-🎯 Project: my-project
-
-📥 Fetching issues from 2000-01-01 to 2000-01-31...
-   📄 Page 1: 500 issues (500 total so far)
-   📄 Page 2: 234 issues (734 total so far)
-📥 Fetching issues from 2000-01-31 to 2000-03-01...
-   📄 Page 1: 500 issues (1234 total so far)
-...
-💾 Writing chunk of 5000 issues to CSV...
-...
-✅ CSV Export completed: 7891 issues exported to sonarqube_issues.csv
-📊 Date range: 2000-01-01 to 2025-11-13
-
-✅ Final output: sonarqube_issues.csv
-```
-
-## Logging and Output Files
-
-The script generates several output files depending on your options:
-
-### Always Generated
-- **CSV/Excel Export**: `sonarqube_issues.csv` or `sonarqube_issues.xlsx` (or custom filename via --output)
-- **Log File**: `sonar_export_YYYYMMDD_HHMMSS.log` - Detailed execution log with timestamps
-
-### Optional Outputs
-- **Summary Report**: `export_summary.txt` - Statistical summary (when using --summary flag)
-- **Intermediate CSV**: When exporting to Excel, a temporary CSV is created first
-
-### Log Levels
-Control logging verbosity with `--log-level`:
-- **DEBUG**: Detailed information for diagnosing problems
-- **INFO**: Confirmation that things are working as expected (default)
-- **WARNING**: Indication that something unexpected happened
-- **ERROR**: Serious problem, the script may not be able to perform some function
-
-Example:
-```bash
-python sonar-export.py --log-level DEBUG --summary
-```
-
-## Available Filters
+## Filter Reference
 
 ### Severities
-- `BLOCKER` - Blocker issues
-- `CRITICAL` - Critical issues
-- `MAJOR` - Major issues
-- `MINOR` - Minor issues
+- `BLOCKER` - Blocker issues (must fix immediately)
+- `CRITICAL` - Critical issues (high priority)
+- `MAJOR` - Major issues (medium priority)
+- `MINOR` - Minor issues (low priority)
 - `INFO` - Informational issues
 
 ### Types
-- `BUG` - Bugs
+- `BUG` - Bugs (functional errors)
 - `VULNERABILITY` - Security vulnerabilities
-- `CODE_SMELL` - Code smells
-- `SECURITY_HOTSPOT` - Security hotspots
+- `CODE_SMELL` - Code quality/maintainability issues
+- `SECURITY_HOTSPOT` - Security review required
 
 ### Statuses
-- `OPEN` - Open issues
+- `OPEN` - Open issues (not yet reviewed)
 - `CONFIRMED` - Confirmed issues
-- `REOPENED` - Reopened issues
-- `RESOLVED` - Resolved issues
+- `REOPENED` - Reopened after being closed
+- `RESOLVED` - Resolved (fixed or accepted)
 - `CLOSED` - Closed issues
+
+---
+
+## Testing
+
+The project includes comprehensive unit tests:
+
+```bash
+# Run all tests
+python -m unittest discover tests/ -v
+
+# Or with pytest (if installed)
+pytest tests/ -v
+
+# Run specific test file
+python -m unittest tests.test_sonar_export -v
+```
+
+**Test Coverage:**
+- ✅ Data flattening and transformation
+- ✅ CSV chunked writing
+- ✅ Multi-project handling
+- ✅ State management (incremental exports)
+- ✅ Configuration file parsing
+- ✅ Date validation
+- ✅ Project key sanitization
+
+---
+
+## Troubleshooting
+
+### Common Issues
+
+**Authentication Error (401)**
+```bash
+# Check your token
+echo $SONAR_TOKEN
+
+# Regenerate token in SonarQube/SonarCloud and update
+export SONAR_TOKEN='new-token-here'
+```
+
+**Project Not Found (404)**
+```bash
+# Verify project key
+# In SonarQube: Project Settings → General Settings → Project Key
+export SONAR_PROJECT_KEY='correct-project-key'
+```
+
+**No Issues Found**
+- Check date range (default: 2000-01-01 to today)
+- Remove filters to see all issues
+- Verify project has issues in SonarQube UI
+
+**Memory Issues with Large Exports**
+- Use CSV format instead of Excel
+- Apply date or severity filters
+- Export by time periods (monthly/quarterly)
+
+### Debug Mode
+
+Enable detailed logging for troubleshooting:
+
+```bash
+python sonar-export.py --log-level DEBUG --output debug_export
+```
+
+Check the log file: `sonar_export_YYYYMMDD_HHMMSS.log`
+
+---
+
+## Examples for Specific Use Cases
+
+### Daily Automated Export (Cron/Scheduled Task)
+
+```bash
+#!/bin/bash
+# daily_export.sh
+
+export SONAR_URL='https://sonarcloud.io/api/issues/search'
+export SONAR_TOKEN='your-token'
+export SONAR_PROJECT_KEY='your-project'
+
+# Incremental export with summary
+python sonar-export.py \
+  --incremental \
+  --summary \
+  --output "daily_export_$(date +%Y%m%d)"
+```
+
+### Weekly Multi-Project Report
+
+```bash
+#!/bin/bash
+# weekly_report.sh
+
+export SONAR_URL='https://sonarcloud.io/api/issues/search'
+export SONAR_TOKEN='your-token'
+
+python sonar-export.py \
+  --projects @production_projects.txt \
+  --incremental \
+  --severities BLOCKER,CRITICAL \
+  --summary \
+  --output "weekly_report_$(date +%Y%m%d)"
+```
+
+### One-Time Historical Analysis
+
+```bash
+# Export all issues for analysis
+python sonar-export.py \
+  --start-date 2020-01-01 \
+  --summary \
+  --output historical_analysis
+
+# Then analyze in Excel/Python/R
+```
+
+---
 
 ## License
 
-This project is licensed under the MIT License.
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+
+---
+
+<div align="center">
+
+**Made with ❤️ for the SonarQube community**
+
+[Report Bug](https://github.com/talha2k/sonarqube-issues-export-to-excel/issues) •
+[Request Feature](https://github.com/talha2k/sonarqube-issues-export-to-excel/issues)
+
+</div>
