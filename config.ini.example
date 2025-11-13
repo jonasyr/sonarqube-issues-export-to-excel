@@ -1,0 +1,40 @@
+[sonarqube]
+# SonarQube/SonarCloud API URL
+url = http://localhost:9000/api/issues/search
+# For SonarCloud, use: https://sonarcloud.io/api/issues/search
+
+# Project key to export
+project_key = my-project
+
+# Token should be set via environment variable SONAR_TOKEN for security
+# Do NOT store your token in this file
+
+[export]
+# Output format: csv or xlsx
+format = csv
+
+# Output directory for exports (optional)
+output_dir = ./exports
+
+# Chunk size for writing to disk (number of issues per chunk)
+chunk_size = 5000
+
+# Default start date for exports (YYYY-MM-DD)
+start_date = 2000-01-01
+
+[filters]
+# Comma-separated values for default filters
+# Leave empty to export all issues
+severities =
+types =
+statuses =
+
+[advanced]
+# Page size for API requests (max 500)
+page_size = 500
+
+# Date range chunk size in days
+date_chunk_days = 30
+
+# Request timeout in seconds
+timeout = 30

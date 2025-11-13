@@ -75,6 +75,9 @@ Options:
   --severities SEVERITIES    Filter by severities (comma-separated)
   --types TYPES              Filter by issue types (comma-separated)
   --statuses STATUSES        Filter by statuses (comma-separated)
+  --config CONFIG_FILE       Path to configuration file
+  --summary                  Generate summary report after export
+  --log-level {DEBUG,INFO,WARNING,ERROR}  Logging level (default: INFO)
 ```
 
 ## Advanced Usage Examples
@@ -131,8 +134,34 @@ python sonar-export.py --format csv --output all_issues
 python sonar-export.py --format xlsx --output all_issues
 ```
 
+### Generate Summary Report
+```bash
+# Export with automatic summary report generation
+python sonar-export.py --summary
+
+# This creates:
+# - sonarqube_issues.csv (the main export)
+# - export_summary.txt (statistical summary)
+```
+
+### Using Configuration Files
+```bash
+# Create a config file (see config.ini.example)
+cp config.ini.example config.ini
+
+# Edit config.ini with your settings
+nano config.ini
+
+# Use the config file (CLI args override config values)
+python sonar-export.py --config config.ini
+
+# Config file combined with CLI overrides
+python sonar-export.py --config config.ini --start-date 2025-01-01 --summary
+```
+
 ## Features
 
+### Core Export Features
 - **Multiple Export Formats**: Export to CSV (default, recommended) or Excel (XLSX) format
 - **CSV-First Strategy**: For Excel exports, creates CSV first then converts (better memory management)
 - **Flexible Date Filtering**: Customize start and end dates for export
@@ -140,13 +169,30 @@ python sonar-export.py --format xlsx --output all_issues
 - **Chunked Writing**: Writes data in chunks (every 5000 issues) to minimize memory usage for large exports
 - **Date Range Handling**: Automatically splits requests into date ranges to handle SonarQube's 10,000 result limit
 - **Pagination Support**: Handles pagination to fetch all issues within each date range
-- **Comprehensive Error Handling**: Includes specific error messages for common issues:
+
+### Data Quality & Analysis
+- **Data Flattening**: Automatically flattens nested JSON structures (textRange, impacts) into separate columns for easier analysis
+- **Summary Reports**: Generate comprehensive statistical summaries with `--summary` flag
+  - Issues by severity, type, and status
+  - Top 10 most common rules
+  - Date range statistics
+- **35+ Flattened Columns**: All relevant SonarQube fields extracted and formatted for analysis
+
+### Reliability & Debugging
+- **Automatic Retry Logic**: Built-in exponential backoff retry for transient failures (429, 500, 502, 503, 504)
+- **Comprehensive Logging**: Timestamped logs to both console and file for debugging
+- **Log Levels**: Configurable verbosity (DEBUG, INFO, WARNING, ERROR)
+- **Comprehensive Error Handling**: Specific error messages for common issues:
   - Authentication failures (401)
   - Project not found (404)
   - Access denied (403)
   - Connection timeouts
   - Network errors
+
+### Configuration & Flexibility
 - **Environment Variable Support**: Configure via environment variables for better security
+- **Configuration File Support**: Use INI files for reusable configurations
+- **CLI Override Priority**: Environment vars > CLI args > config file > defaults
 - **Progress Reporting**: Shows real-time progress during export
 
 ## Performance Recommendations
@@ -236,6 +282,30 @@ Example output:
 📊 Date range: 2000-01-01 to 2025-11-13
 
 ✅ Final output: sonarqube_issues.csv
+```
+
+## Logging and Output Files
+
+The script generates several output files depending on your options:
+
+### Always Generated
+- **CSV/Excel Export**: `sonarqube_issues.csv` or `sonarqube_issues.xlsx` (or custom filename via --output)
+- **Log File**: `sonar_export_YYYYMMDD_HHMMSS.log` - Detailed execution log with timestamps
+
+### Optional Outputs
+- **Summary Report**: `export_summary.txt` - Statistical summary (when using --summary flag)
+- **Intermediate CSV**: When exporting to Excel, a temporary CSV is created first
+
+### Log Levels
+Control logging verbosity with `--log-level`:
+- **DEBUG**: Detailed information for diagnosing problems
+- **INFO**: Confirmation that things are working as expected (default)
+- **WARNING**: Indication that something unexpected happened
+- **ERROR**: Serious problem, the script may not be able to perform some function
+
+Example:
+```bash
+python sonar-export.py --log-level DEBUG --summary
 ```
 
 ## Available Filters
